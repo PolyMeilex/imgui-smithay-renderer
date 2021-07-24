@@ -1,0 +1,10 @@
+[package]
+name = "imgui-smithay-renderer"
+version = "0.1.0"
+authors = ["Poly <marynczak.bartlomiej@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+imgui = "0.7.0"
+memoffset = "0.6.4"
+smithay = { git="https://github.com/Smithay/smithay.git", features=["renderer_gl"] }
