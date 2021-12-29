@@ -5,6 +5,10 @@ authors = ["Poly <marynczak.bartlomiej@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-imgui = "0.7.0"
-memoffset = "0.6.4"
+imgui = "0.8"
+memoffset = "0.6"
+cgmath = "0.18.0"
 smithay = { git="https://github.com/Smithay/smithay.git", features=["renderer_gl"] }
+
+[dev-dependencies]
+smithay = { git="https://github.com/Smithay/smithay.git", features=["renderer_gl", "backend_winit"] }
