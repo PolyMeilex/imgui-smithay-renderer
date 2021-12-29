@@ -1,8 +1,9 @@
 pub extern crate imgui;
 use std::ffi::CString;
 
-use smithay::backend::renderer::gles2::ffi;
+use cgmath::SquareMatrix;
 use smithay::backend::renderer::gles2::ffi::Gles2;
+use smithay::backend::renderer::{gles2::ffi, Transform};
 
 use imgui::{DrawCmd, DrawCmdParams, Textures};
 
@@ -21,7 +22,8 @@ unsafe fn get_attrib_location(gl: &Gles2, program: ffi::types::GLuint, name: &st
 
 unsafe fn get_uniform_location(gl: &Gles2, program: ffi::types::GLuint, name: &str) -> Option<u32> {
     let name = CString::new(name).unwrap();
-    let uniform_location = gl.GetUniformLocation(program, name.as_ptr() as *const ffi::types::GLchar);
+    let uniform_location =
+        gl.GetUniformLocation(program, name.as_ptr() as *const ffi::types::GLchar);
     if uniform_location < 0 {
         None
     } else {
@@ -196,7 +198,7 @@ impl Renderer {
         }
     }
 
-    pub fn render(&self, gl: &Gles2, draw_data: &imgui::DrawData) {
+    pub fn render(&self, transform: Transform, gl: &Gles2, draw_data: &imgui::DrawData) {
         let fb_width = draw_data.display_size[0] * draw_data.framebuffer_scale[0];
         let fb_height = draw_data.display_size[1] * draw_data.framebuffer_scale[1];
         if !(fb_width > 0.0 && fb_height > 0.0) {
@@ -208,19 +210,50 @@ impl Renderer {
         let top = draw_data.display_pos[1];
         let bottom = draw_data.display_pos[1] + draw_data.display_size[1];
 
-        #[rustfmt::skip]
-        let matrix = [
-            (2.0 / (right - left)), 0.0, 0.0, 0.0,
-            0.0, (2.0 / (top - bottom)), 0.0, 0.0,
-            0.0, 0.0, -1.0, 0.0,
-            (right + left) / (left - right),
-            (top + bottom) / (bottom - top),
-            0.0,
-            1.0,
-        ];
+        let matrix = cgmath::Matrix4 {
+            x: ((2.0 / (right - left)), 0.0, 0.0, 0.0).into(),
+            y: (0.0, (2.0 / (top - bottom)), 0.0, 0.0).into(),
+            z: (0.0, 0.0, -1.0, 0.0).into(),
+            w: (
+                (right + left) / (left - right),
+                (top + bottom) / (bottom - top),
+                0.0,
+                1.0,
+            )
+                .into(),
+        };
 
-        let clip_off = draw_data.display_pos;
-        let clip_scale = draw_data.framebuffer_scale;
+        let transform3 = transform.matrix();
+        let mut transform = cgmath::Matrix4::identity();
+
+        {
+            let mut row = &mut transform.x;
+            let row3 = &transform3.x;
+            row.x = row3.x;
+            row.y = row3.y;
+            row.z = row3.z;
+        }
+        {
+            let mut row = &mut transform.y;
+            let row3 = &transform3.y;
+            row.x = row3.x;
+            row.y = row3.y;
+            row.z = row3.z;
+        }
+        {
+            let mut row = &mut transform.z;
+            let row3 = &transform3.z;
+            row.x = row3.x;
+            row.y = row3.y;
+            row.z = row3.z;
+        }
+
+        let matrix_src = transform * matrix;
+
+        let matrix: &[f32; 16] = matrix_src.as_ref();
+
+        // let clip_off = draw_data.display_pos;
+        // let clip_scale = draw_data.framebuffer_scale;
 
         unsafe {
             gl.BindVertexArray(self.vao);
@@ -265,8 +298,8 @@ impl Renderer {
                 gl.BlendFunc(ffi::SRC_ALPHA, ffi::ONE_MINUS_SRC_ALPHA);
                 gl.UseProgram(self.program);
 
-                let shader_loc =
-                    get_uniform_location(gl, self.program, "matrix").expect("error finding matrix uniform");
+                let shader_loc = get_uniform_location(gl, self.program, "matrix")
+                    .expect("error finding matrix uniform");
 
                 gl.UniformMatrix4fv(
                     shader_loc as i32,
@@ -287,21 +320,21 @@ impl Renderer {
                             count,
                             cmd_params:
                                 DrawCmdParams {
-                                    clip_rect,
+                                    // clip_rect,
                                     idx_offset,
                                     texture_id,
                                     ..
                                 },
                         } => {
-                            let x = (clip_rect[0] - clip_off[0]) * clip_scale[0];
-                            let y = (clip_rect[1] - clip_off[1]) * clip_scale[1];
-                            let z = (clip_rect[2] - clip_off[0]) * clip_scale[0];
-                            let w = (clip_rect[3] - clip_off[1]) * clip_scale[1];
+                            // let x = (clip_rect[0] - clip_off[0]) * clip_scale[0];
+                            // let y = (clip_rect[1] - clip_off[1]) * clip_scale[1];
+                            // let z = (clip_rect[2] - clip_off[0]) * clip_scale[0];
+                            // let w = (clip_rect[3] - clip_off[1]) * clip_scale[1];
 
                             let texture = self.textures.get(texture_id).unwrap();
                             gl.BindTexture(ffi::TEXTURE_2D, *texture);
 
-                            gl.Scissor(x as _, (fb_height - w) as _, (z - x) as _, (w - y) as _);
+                            // gl.Scissor(x as _, (fb_height - w) as _, (z - x) as _, (w - y) as _);
                             gl.DrawElements(
                                 ffi::TRIANGLES,
                                 count as i32,
